@@ -5,11 +5,15 @@ import gymnasium as gym
 import dsrl
 
 class SafeGymnasium(Dataset):
-    def __init__(self,env_name,split='train',traj_len=1000,**kwargs):
+    def __init__(self,env_name,split='train',subtraj_len=100,traj_len=1000,**kwargs):
         env = gym.make('OfflineCarGoal2-v0')
-        self.data = env.get_dataset()
-        self.traj_len = traj_len
-        num_traj = self.data['observation'].shape[0]/self.tranj_len
+        data = env.get_dataset()
+        action_dim = data['actions'].shape[1]
+        ob_dim = data['observations'].shape[1]
+        self.observations = data['observations']
+        self.next_observations = data['next_observations']
+        self.actions = data['actions']
+        num_traj = self.observations.shape[0]
         num_train = int(num_traj*0.9)
         if split == 'train':
             self.num_traj = num_train
@@ -19,17 +23,42 @@ class SafeGymnasium(Dataset):
             self.offset = num_train
         
     def __len__(self):
-        return self.data['observation'].shape[0]/self.tranj_len
+        return self.num_traj
     
     def __getitem__(self, idx):
-        idx_head = self.offset+1000*idx
-        idx_tail = self.offset+1000*(idx+1)
-        state = self.data['observation'][idx_head:idx_tail]
-        next_state = self.data['next_observations'][idx_head:idx_tail]
-        action = self.data['action'][idx_head:idx_tail]
+        state = self.observations[self.offset+idx]
+        next_state = self.next_observations[self.offset+idx]
+        action = self.actions[self.offset+idx]
         return torch.tensor(state), torch.tensor(next_state), torch.tensor(action)
 
-class DeepAccidentDataset(LightningDataModule):
+# class SafeGymnasium(Dataset):
+#     def __init__(self,env_name,split='train',subtraj_len=100,traj_len=1000,**kwargs):
+#         env = gym.make('OfflineCarGoal2-v0')
+#         data = env.get_dataset()
+#         action_dim = data['actions'].shape[1]
+#         ob_dim = data['observations'].shape[1]
+#         self.observations = data['observations'].reshape(-1, subtraj_len, ob_dim)
+#         self.next_observations = data['next_observations'].reshape(-1, subtraj_len, ob_dim)
+#         self.actions = data['actions'].reshape(-1, subtraj_len, action_dim)
+#         num_traj = self.observations.shape[0]
+#         num_train = int(num_traj*0.9)
+#         if split == 'train':
+#             self.num_traj = num_train
+#             self.offset = 0
+#         else:
+#             self.num_traj = num_traj - num_train
+#             self.offset = num_train
+        
+#     def __len__(self):
+#         return self.num_traj
+    
+#     def __getitem__(self, idx):
+#         state = self.observations[self.offset+idx]
+#         next_state = self.next_observations[self.offset+idx]
+#         action = self.actions[self.offset+idx]
+#         return torch.tensor(state), torch.tensor(next_state), torch.tensor(action)
+
+class SafeGymnasiumDataset(LightningDataModule):
     """
     PyTorch Lightning data module 
 
@@ -47,6 +76,7 @@ class DeepAccidentDataset(LightningDataModule):
     def __init__(
         self,
         env_name,
+        subtraj_len: int = 100,
         train_batch_size: int = 16,
         val_batch_size: int = 8,
         test_batch_size: int = 8,
@@ -63,17 +93,20 @@ class DeepAccidentDataset(LightningDataModule):
         self.num_workers = num_workers
         self.pin_memory = pin_memory
         self.drop_last = drop_last
+        self.subtraj_len = subtraj_len
         self.env_name = env_name
 
     def setup(self, stage=None):
 
         self.train_dataset = SafeGymnasium(
             env_name = self.env_name,
+            subtraj_len = self.subtraj_len,
             split='train',
         )
         
         self.val_dataset = SafeGymnasium(
             env_name = self.env_name,
+            subtraj_len = self.subtraj_len,
             split='val',
         )
         

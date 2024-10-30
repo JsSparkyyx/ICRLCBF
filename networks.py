@@ -2,8 +2,6 @@ import torch
 from torch.distributions import Normal
 from torch.distributions.independent import Independent
 from utils import build_mlp
-import cvxpy as cp
-from cvxpylayers.torch import CvxpyLayer
 
 class CBF(torch.nn.Module):
     def __init__(self,state_dim=72,
@@ -48,7 +46,8 @@ class NeuralDynamics(torch.nn.Module):
 
     def forward_prop(self,state,action):
         f,g = self.forward(state)
-        gu = torch.einsum('btsa,bta->bts',g.view(g.shape[0],g.shape[1],self.state_dim,self.num_action),action)
+        gu = torch.einsum('bsa,ba->bs',g.view(g.shape[0],g.shape[1],self.state_dim,self.num_action),action)
+        # gu = torch.einsum('btsa,bta->bts',g.view(g.shape[0],g.shape[1],self.state_dim,self.num_action),action)
         state_dot = f + gu
         state_nom = state + state_dot*self.dt
         return state_nom
@@ -76,16 +75,18 @@ class NominalDynamics(torch.nn.Module):
 
     def forward_prop(self,state,action,next_state):
         f,g = self.forward(state)
-        gu = torch.einsum('btsa,bta->bts',g.view(g.shape[0],g.shape[1],self.state_dim,self.num_action),action)
+        gu = torch.einsum('bsa,ba->bs',g.view(g.shape[0],g.shape[1],self.state_dim,self.num_action),action)
+        # gu = torch.einsum('btsa,bta->bts',g.view(g.shape[0],g.shape[1],self.state_dim,self.num_action),action)
         state_dot = f + gu
         state_nom = state + state_dot*self.dt
         return state_nom + (next_state-state_nom).detach()
 
 class GaussianMLP(torch.nn.Module):
     def __init__(self,
-                 state_shape,
-                 action_dim,
-                 units=(8, 8),
+                 action_dim=2,
+                 state_shape=72,
+                 hidden_dim=64,
+                #  units=(8, 8),
                  hidden_nonlinearity=torch.nn.Tanh,
                  w_init=torch.nn.init.xavier_normal_,
                  b_init=torch.nn.init.zeros_,
@@ -93,6 +94,7 @@ class GaussianMLP(torch.nn.Module):
                  init_std=1.0,
                  min_std=1.e-6,
                  max_std=None,
+                 num_layer=3,
                  std_parameterization='exp',
                  normal_distribution_cls=Normal):
         super(GaussianMLP, self).__init__()
@@ -103,7 +105,8 @@ class GaussianMLP(torch.nn.Module):
         self._norm_dist_class = normal_distribution_cls
 
         self._mean_module = torch.nn.Sequential()
-        in_dim = state_shape + action_dim
+        units = [hidden_dim for _ in range(num_layer-1)]
+        in_dim = state_shape
         for idx, unit in enumerate(units):
             linear_layer = torch.nn.Linear(in_dim, unit)
             w_init(linear_layer.weight)
@@ -133,17 +136,17 @@ class GaussianMLP(torch.nn.Module):
         if max_std is not None:
             self._max_std_param = torch.Tensor([max_std]).log()
 
-    def _get_mean_and_log_std(self, *inputs):
-        assert len(inputs) == 1
-        mean = self._mean_module(*inputs)
+    def _get_mean_and_log_std(self, inputs):
+        # assert len(inputs) == 1
+        mean = self._mean_module(inputs)
 
         broadcast_shape = list(inputs[0].shape[:-1]) + [self._action_dim]
-        uncentered_log_std = torch.zeros(*broadcast_shape) + self._init_std
+        uncentered_log_std = torch.zeros(broadcast_shape).to(inputs.device) + self._init_std
 
         return mean, uncentered_log_std
 
-    def forward(self, *inputs):
-        mean, log_std_uncentered = self._get_mean_and_log_std(*inputs)
+    def forward(self, inputs):
+        mean, log_std_uncentered = self._get_mean_and_log_std(inputs)
 
         if self._min_std_param or self._max_std_param:
             log_std_uncentered = log_std_uncentered.clamp(
@@ -162,5 +165,4 @@ class GaussianMLP(torch.nn.Module):
         # Makes it so that a sample from the distribution is treated as a
         # single sample and not dist.batch_shape samples.
         dist = Independent(dist, 1)
-
-        return dist
+        return dist.sample()

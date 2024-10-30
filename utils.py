@@ -1,6 +1,6 @@
 import torch
 
-def build_mlp(hidden_dims,dropout=0,activation=torch.nn.ReLU,with_bn=True,no_act_last_layer=True):
+def build_mlp(hidden_dims,dropout=0,activation=torch.nn.ReLU,with_bn=False,no_act_last_layer=True):
     modules = []
     for i in range(len(hidden_dims)-1):
         modules.append(torch.nn.Linear(hidden_dims[i], hidden_dims[i+1]))
