@@ -3,7 +3,7 @@ from agent import Agent
 from trainer import ICRLCBFTrainer
 from lightning.pytorch import Trainer, seed_everything
 from lightning.pytorch.loggers import WandbLogger
-from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.callbacks import ModelCheckpoint, BatchSizeFinder
 from init_parameters import init_parameters
 from data import SafeGymnasiumDataset
 import wandb
@@ -24,6 +24,7 @@ def main(args):
                                      dirpath =os.path.join(args["save_path"], "checkpoints"), 
                                      monitor= "val_loss",
                                      save_last= True),
+                     BatchSizeFinder(mode="binsearch")
                  ],
                  max_epochs=args['epoch_cbf']+args['epoch_dynamics'])
     runner.fit(trainer, datamodule=data)

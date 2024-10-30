@@ -46,7 +46,7 @@ class NeuralDynamics(torch.nn.Module):
 
     def forward_prop(self,state,action):
         f,g = self.forward(state)
-        gu = torch.einsum('bsa,ba->bs',g.view(g.shape[0],g.shape[1],self.state_dim,self.num_action),action)
+        gu = torch.einsum('bsa,ba->bs',g.view(g.shape[0],self.state_dim,self.num_action),action)
         # gu = torch.einsum('btsa,bta->bts',g.view(g.shape[0],g.shape[1],self.state_dim,self.num_action),action)
         state_dot = f + gu
         state_nom = state + state_dot*self.dt
@@ -75,7 +75,7 @@ class NominalDynamics(torch.nn.Module):
 
     def forward_prop(self,state,action,next_state):
         f,g = self.forward(state)
-        gu = torch.einsum('bsa,ba->bs',g.view(g.shape[0],g.shape[1],self.state_dim,self.num_action),action)
+        gu = torch.einsum('bsa,ba->bs',g.view(g.shape[0],self.state_dim,self.num_action),action)
         # gu = torch.einsum('btsa,bta->bts',g.view(g.shape[0],g.shape[1],self.state_dim,self.num_action),action)
         state_dot = f + gu
         state_nom = state + state_dot*self.dt

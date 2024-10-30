@@ -17,6 +17,7 @@ class ICRLCBFTrainer(L.LightningModule):
         self.epoch_dynamics = epoch_dynamics
         self.epoch_cbf = epoch_cbf
         self.agent = agent
+        self.alpha = alpha
         self.eps = eps
         self.lr = lr
         self.weight_decay = weight_decay
